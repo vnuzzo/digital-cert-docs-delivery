@@ -1,0 +1,86 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: request-service
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/request_service?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: request_user
+    password: request_pass
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+    open-in-view: false
+
+  cloud:
+    function:
+      definition: "deliveryResultConsumer"
+    stream:
+      defaultBinder: kafka
+      bindings:
+        requestEvents-out-0:
+          destination: request.events
+          contentType: application/json
+        deliveryCommands-out-0:
+          destination: delivery.commands
+          contentType: application/json
+        deliveryResultConsumer-in-0:
+          destination: delivery.events
+          group: request-service
+          contentType: application/json
+          consumer:
+            maxAttempts: 3
+            backOffInitialInterval: 1000
+            backOffMultiplier: 2.0
+            backOffMaxInterval: 10000
+            concurrency: 3
+      kafka:
+        binder:
+          brokers: localhost:9092
+        bindings:
+          requestEvents-out-0:
+            producer:
+              configuration:
+                key.serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+                value.serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+          deliveryCommands-out-0:
+            producer:
+              configuration:
+                key.serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+                value.serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+          deliveryResultConsumer-in-0:
+            consumer:
+              enableDlq: true
+              configuration:
+                key.deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+                value.deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+                auto.offset.reset: earliest
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+logging:
+  level:
+    root: INFO
+    it.vnuzzo: INFO
+
+app:
+  outbox:
+    poll-delay-ms: 500
+    max-attempts: 3
+    batch-size: 100
+    back-off-millis: 500
+  request:
+    consumer-name: request-service:delivery.events
