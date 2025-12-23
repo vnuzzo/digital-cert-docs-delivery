@@ -1,0 +1,70 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: notification-service
+
+  data:
+    mongodb:
+      uri: mongodb://admin:adminpassword@localhost:27017/notification_service?authSource=admin
+
+  cloud:
+    function:
+      definition: notificationEventConsumer
+    stream:
+      bindings:
+        notificationEventConsumer-in-0:
+          destination: request.events
+          group: notification-service
+          contentType: application/json
+          condition: "headers['eventType']=='RequestStatusChanged'"
+          consumer:
+            maxAttempts: 3
+            backOffInitialInterval: 1000
+            backOffMultiplier: 2.0
+            backOffMaxInterval: 10000
+            concurrency: 3
+      kafka:
+        binder:
+          brokers: localhost:9092
+        bindings:
+          notificationEventConsumer-in-0:
+            consumer:
+              enableDlq: true
+              configuration:
+                key.deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+                value.deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+                auto.offset.reset: earliest
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    defaults:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    it.vnuzzo: INFO
+    org.springframework.cloud.stream: INFO
+    org.springframework.kafka: WARN
+    org.springframework.data.mongodb: WARN
+
+app:
+  notification:
+    consumer-name: notification-service:tracking.events
+  web-client:
+    internal-service:
+      base-url: http://localhost:8081
+      uri: api/recipients/validate
+      timeout: 30000
+      connection-timeout: 30000
+      response-timeout: 30000
