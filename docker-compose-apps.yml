@@ -1,0 +1,118 @@
+services:
+
+  request-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MODULE: request-service
+        APP_PORT: 8082
+    depends_on:
+      digital-cert-delivery-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      SERVER_PORT: 8082
+      SPRING_DATASOURCE_URL: jdbc:mysql://digital-cert-delivery-db:3306/request_service?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: request_user
+      SPRING_DATASOURCE_PASSWORD: request_pass
+      SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:29092
+    ports:
+      - "8082:8082"
+    networks: [digital-delivery-network]
+
+  recipient-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MODULE: recipient-service
+        APP_PORT: 8081
+    depends_on:
+      digital-cert-delivery-db:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8081
+      SPRING_DATASOURCE_URL: jdbc:mysql://digital-cert-delivery-db:3306/recipient_service?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: recipient_user
+      SPRING_DATASOURCE_PASSWORD: recipient_pass
+    ports:
+      - "8081:8081"
+    networks: [digital-delivery-network]
+
+  delivery-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MODULE: delivery-service
+        APP_PORT: 8083
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      recipient-service:
+        condition: service_started
+    environment:
+      SERVER_PORT: 8083
+      SPRING_DATA_MONGODB_URI: mongodb://admin:adminpassword@mongodb:27017/delivery_service?authSource=admin
+      SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:29092
+      APP_WEB_CLIENT_RECIPIENT_BASE_URL: http://recipient-service:8081
+      APP_WEB_CLIENT_RECIPIENT_URI: /api/recipients/validate
+      APP_WEB_CLIENT_DOCUMENT_BASE_URL: http://document-service:8085
+      APP_WEB_CLIENT_DOCUMENT_URI: /documents/validate
+    ports:
+      - "8083:8083"
+    networks: [digital-delivery-network]
+
+  tracking-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MODULE: tracking-service
+        APP_PORT: 8084
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      SERVER_PORT: 8084
+      SPRING_DATA_MONGODB_URI: mongodb://admin:adminpassword@mongodb:27017/tracking_service?authSource=admin
+      SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:29092
+    ports:
+      - "8084:8084"
+    networks: [digital-delivery-network]
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MODULE: notification-service
+        APP_PORT: 8085
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      SERVER_PORT: 8085
+      SPRING_DATA_MONGODB_URI: mongodb://admin:adminpassword@mongodb:27017/notification_service?authSource=admin
+      SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:29092
+      APP_NOTIFICATION_INTERNAL_ENDPOINT_BASE_URL: http://internal-service:8089
+      APP_NOTIFICATION_INTERNAL_ENDPOINT_PATH: /internal/notify
+    ports:
+      - "8085:8085"
+    networks: [digital-delivery-network]
